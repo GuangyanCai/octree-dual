@@ -14,4 +14,4 @@ which will generate a random quadtree and its duals, and display them. Here is a
 
 ![demo](demo.png)
 
-The blue grid is the quadtree and the red grid is the duals.
+The blue grid is the quadtree and the red grid is the duals. For more details, please refer to the code.

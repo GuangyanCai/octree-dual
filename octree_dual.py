@@ -6,46 +6,57 @@ from matplotlib.collections import LineCollection
 
 @dataclass
 class Node:
+    # Simple node class to represent quad tree nodes
     is_leaf: bool = True
 
 class QuadTree:
 
     def __init__(self, max_levels):
+        """Initialize quad tree with maximum number of subdivision levels"""
         self.max_levels = max_levels
-        self.nodes = {1: Node()}
+        self.nodes = {1: Node()} # Root node with key 1
+        # Pre-calculate bit masks for dilated coordinates
         tmp1 = (1 << (max_levels + 1)) - 1
         tmp2 = (1 << (max_levels + 1) * 2) - 1
-        self.dil_x = pm.interleave2(tmp1, 0)
-        self.dil_y = pm.interleave2(0, tmp1)
-        self.dil_x_neg = ~self.dil_x & tmp2
-        self.dil_y_neg = ~self.dil_y & tmp2
+        self.dil_x = pm.interleave2(tmp1, 0)  # Dilated x-coordinate mask
+        self.dil_y = pm.interleave2(0, tmp1)  # Dilated y-coordinate mask
+        self.dil_x_neg = ~self.dil_x & tmp2   # Negated x mask
+        self.dil_y_neg = ~self.dil_y & tmp2   # Negated y mask
 
     def point_to_key(self, point):
+        """Convert 2D point coordinates to Morton key"""
         if point[0] < 0 or point[0] > 1 or point[1] < 0 or point[1] > 1:
             return 0
         
+        # Convert point to binary coordinates
         bin_point = np.floor(point * 2 ** self.max_levels)
 
+        # Generate Morton key using interleaved coordinates
         key = pm.interleave2(int(bin_point[0]), int(bin_point[1]))
         key |= 1 << (2 * self.max_levels)
         return key
     
     def find_point(self, point):
+        """Find the leaf node containing the given point"""
         key = self.point_to_key(point)
         while not self.key_is_leaf(key) and key != 0:
             key >>= 2
         return key
     
     def key_to_lv(self, key):
+        """Convert Morton key to tree level"""
         return int(np.floor(np.log2(key) / 2))
     
     def key_exists(self, key):
+        """Check if node with given key exists"""
         return key in self.nodes
 
     def key_is_leaf(self, key):
+        """Check if node with given key is a leaf"""
         return key in self.nodes and self.nodes[key].is_leaf
     
     def subdiv_by_key(self, key):
+        """Subdivide leaf node with given key"""
         if self.key_is_leaf(key):
             lv = self.key_to_lv(key)
             if lv < self.max_levels:
@@ -56,9 +67,11 @@ class QuadTree:
                 self.nodes[key].is_leaf = False
 
     def subdiv_by_point(self, point):
+        """Subdivide leaf node containing given point"""
         self.subdiv_by_key(self.find_point(point))
 
     def get_node(self, key):
+        """Get corner vertices of node with given key"""
         lv = self.key_to_lv(key)
         new_key = key & ((1 << (lv * 2)) - 1)
         side = 2 ** (-lv)
@@ -70,6 +83,7 @@ class QuadTree:
         return v0, v1, v2, v3
     
     def get_node_center(self, key):
+        """Get center point of node with given key"""
         lv = self.key_to_lv(key)
         new_key = key & ((1 << (lv * 2)) - 1)
         side = 2 ** (-lv)
@@ -77,6 +91,7 @@ class QuadTree:
         return center
     
     def get_quad_tree_segments(self):
+        """Get line segments for drawing quad tree"""
         segments = []
 
         for leaf in self.nodes:
@@ -89,6 +104,7 @@ class QuadTree:
         return segments
     
     def leaf_to_vert(self, key):
+        """Convert leaf node key to vertex keys of dual graph"""
         lv = self.key_to_lv(key)
         lv_k = 1 << 2 * lv
         vert = []
@@ -102,6 +118,7 @@ class QuadTree:
         return lv, vert
     
     def vert_to_leaf(self, key, lv):
+        """Convert vertex key to adjacent leaf node keys"""
         dkey = key >> 2 * (self.max_levels - lv)
         adj_nodes = []
         for i in range(4):
@@ -109,6 +126,7 @@ class QuadTree:
         return adj_nodes
     
     def gen_dual(self):
+        """Generate dual graph nodes from quad tree"""
         dual_nodes = []
 
         for key in self.nodes:
@@ -142,13 +160,16 @@ class QuadTree:
         return dual_nodes
 
 def plot_quad_tree(quad_tree):
+    """Plot quad tree and its dual graph"""
     fig, ax = plt.subplots()
     ax.set_xlim(-0.1, 1.1)
     ax.set_ylim(-0.1, 1.1)
     ax.set_aspect('equal')
     ax.set_axis_off()
+    # Draw quad tree edges in blue
     ax.add_collection(LineCollection(quad_tree.get_quad_tree_segments(), colors='blue', linewidths=1.5, linestyle='solid'))
 
+    # Draw dual graph edges in red
     dual_segments = []
     for node in quad_tree.gen_dual():
         vert = []
@@ -166,6 +187,7 @@ def plot_quad_tree(quad_tree):
 
 
 if __name__ == '__main__':
+    # Create quad tree with 10 levels and randomly subdivide 20 times
     quadtree = QuadTree(10)
 
     for i in range(20):
